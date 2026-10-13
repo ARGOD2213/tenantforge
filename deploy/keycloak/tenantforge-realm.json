@@ -23,6 +23,71 @@
       ]
     }
   ],
+  "identityProviders": [
+    {
+      "alias": "orbit-oidc",
+      "displayName": "Orbit Logistics SSO",
+      "providerId": "oidc",
+      "enabled": false,
+      "trustEmail": true,
+      "config": {
+        "issuer": "https://login.orbit.example/realms/orbit",
+        "authorizationUrl": "https://login.orbit.example/realms/orbit/protocol/openid-connect/auth",
+        "tokenUrl": "https://login.orbit.example/realms/orbit/protocol/openid-connect/token",
+        "jwksUrl": "https://login.orbit.example/realms/orbit/protocol/openid-connect/certs",
+        "useJwksUrl": "true",
+        "validateSignature": "true",
+        "clientId": "tenantforge",
+        "clientSecret": "set-when-orbit-onboards",
+        "clientAuthMethod": "client_secret_post",
+        "defaultScope": "openid email profile",
+        "syncMode": "IMPORT"
+      }
+    },
+    {
+      "alias": "zenith-saml",
+      "displayName": "Zenith Labs SSO",
+      "providerId": "saml",
+      "enabled": false,
+      "trustEmail": true,
+      "config": {
+        "singleSignOnServiceUrl": "https://idp.zenith.example/saml/sso",
+        "nameIDPolicyFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+        "principalType": "SUBJECT",
+        "postBindingResponse": "true",
+        "postBindingAuthnRequest": "true",
+        "wantAuthnRequestsSigned": "false",
+        "validateSignature": "false",
+        "syncMode": "IMPORT"
+      }
+    }
+  ],
+  "identityProviderMappers": [
+    {
+      "name": "orbit users join the orbit tenant",
+      "identityProviderAlias": "orbit-oidc",
+      "identityProviderMapper": "oidc-hardcoded-group-idp-mapper",
+      "config": { "syncMode": "INHERIT", "group": "/tenants/33333333-3333-3333-3333-333333333333" }
+    },
+    {
+      "name": "orbit users are members",
+      "identityProviderAlias": "orbit-oidc",
+      "identityProviderMapper": "oidc-hardcoded-role-idp-mapper",
+      "config": { "syncMode": "INHERIT", "role": "tenant_member" }
+    },
+    {
+      "name": "zenith users join the zenith tenant",
+      "identityProviderAlias": "zenith-saml",
+      "identityProviderMapper": "oidc-hardcoded-group-idp-mapper",
+      "config": { "syncMode": "INHERIT", "group": "/tenants/22222222-2222-2222-2222-222222222222" }
+    },
+    {
+      "name": "zenith users are members",
+      "identityProviderAlias": "zenith-saml",
+      "identityProviderMapper": "oidc-hardcoded-role-idp-mapper",
+      "config": { "syncMode": "INHERIT", "role": "tenant_member" }
+    }
+  ],
   "users": [
     {
       "username": "alice",

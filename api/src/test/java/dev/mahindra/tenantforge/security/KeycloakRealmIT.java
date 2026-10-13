@@ -95,11 +95,41 @@ class KeycloakRealmIT extends IntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private String login(String username, String password) throws Exception {
-        String form = form(Map.of("grant_type", "password", "client_id", "tenantforge-cli",
-                "username", username, "password", password, "scope", "openid"));
+    @Test
+    void enterpriseTenantsCanBringTheirOwnIdentityProvider() throws Exception {
+        // each tenant's IdP (OIDC or SAML) is a realm identity provider whose mappers put brokered users into that
+        // tenant's group, so their tokens carry the same tenant_id and roles claims as local users
+        String admin = token("master", "admin-cli", "admin", "admin");
+        JsonNode providers = adminGet(admin, "/identity-provider/instances");
+        assertThat(providers.findValuesAsText("alias")).contains("orbit-oidc", "zenith-saml");
+        assertThat(providers.findValuesAsText("providerId")).contains("oidc", "saml");
+
+        JsonNode orbitMappers = adminGet(admin, "/identity-provider/instances/orbit-oidc/mappers");
+        assertThat(orbitMappers.findValuesAsText("group")).containsExactly("/tenants/" + ORBIT);
+        assertThat(orbitMappers.findValuesAsText("role")).containsExactly("tenant_member");
+        JsonNode zenithMappers = adminGet(admin, "/identity-provider/instances/zenith-saml/mappers");
+        assertThat(zenithMappers.findValuesAsText("group")).containsExactly("/tenants/" + ZENITH);
+    }
+
+    private JsonNode adminGet(String adminToken, String path) throws Exception {
+        String base = "http://" + KEYCLOAK.getHost() + ":" + KEYCLOAK.getMappedPort(8080) + "/admin/realms/tenantforge";
         HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create(realmUrl() + "/protocol/openid-connect/token"))
+                HttpRequest.newBuilder(URI.create(base + path)).header("Authorization", "Bearer " + adminToken).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        return json.readTree(response.body());
+    }
+
+    private String login(String username, String password) throws Exception {
+        return token("tenantforge", "tenantforge-cli", username, password);
+    }
+
+    private String token(String realm, String clientId, String username, String password) throws Exception {
+        String form = form(Map.of("grant_type", "password", "client_id", clientId,
+                "username", username, "password", password, "scope", "openid"));
+        String realmBase = "http://" + KEYCLOAK.getHost() + ":" + KEYCLOAK.getMappedPort(8080) + "/realms/" + realm;
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(realmBase + "/protocol/openid-connect/token"))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(HttpRequest.BodyPublishers.ofString(form)).build(),
                 HttpResponse.BodyHandlers.ofString());
