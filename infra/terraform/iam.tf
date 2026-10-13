@@ -23,6 +23,12 @@ locals {
       service_account = "keda-operator"
       policy          = data.aws_iam_policy_document.keda.json
     }
+    otel_collector = {
+      role_name       = "${local.name}-otel-collector"
+      namespace       = "observability"
+      service_account = "otel-collector"
+      policy          = data.aws_iam_policy_document.otel_collector.json
+    }
     external_secrets = {
       role_name       = "${local.name}-external-secrets"
       namespace       = "external-secrets"
@@ -84,6 +90,19 @@ data "aws_iam_policy_document" "keda" {
   statement {
     actions   = ["sqs:GetQueueAttributes"]
     resources = [aws_sqs_queue.exports.arn]
+  }
+}
+
+# OpenTelemetry Collector: export traces to AWS X-Ray.
+data "aws_iam_policy_document" "otel_collector" {
+  statement {
+    actions = [
+      "xray:PutTraceSegments",
+      "xray:PutTelemetryRecords",
+      "xray:GetSamplingRules",
+      "xray:GetSamplingTargets",
+    ]
+    resources = ["*"]
   }
 }
 

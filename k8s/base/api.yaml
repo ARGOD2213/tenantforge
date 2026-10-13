@@ -19,6 +19,10 @@ spec:
   template:
     metadata:
       labels: { app: tenantforge-api }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: /actuator/prometheus
     spec:
       serviceAccountName: tenantforge-api
       securityContext:

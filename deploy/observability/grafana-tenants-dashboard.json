@@ -1,0 +1,111 @@
+{
+  "title": "TenantForge · per tenant",
+  "uid": "tenantforge-tenants",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "tags": ["tenantforge"],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {}
+      },
+      {
+        "name": "tenant",
+        "label": "Tenant",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(http_server_requests_seconds_count{tenant!=\"none\"}, tenant)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests per second by tenant",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tenant) (rate(http_server_requests_seconds_count{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{tenant}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Rate-limited (429) per second by tenant",
+      "description": "Per-tenant token buckets in Redis. A tenant here is hitting its plan's limit; other tenants are unaffected.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tenant) (rate(tenantforge_ratelimit_rejected_total{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{tenant}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "p95 latency by tenant (from SLO buckets)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (tenant, le) (rate(http_server_requests_seconds_bucket{tenant=~\"$tenant\"}[5m])))",
+          "legendFormat": "{{tenant}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Server errors (5xx) by tenant",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tenant) (rate(http_server_requests_seconds_count{tenant=~\"$tenant\", status=~\"5..\"}[5m]))",
+          "legendFormat": "{{tenant}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Share of requests under 250 ms by tenant",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tenant) (rate(http_server_requests_seconds_bucket{tenant=~\"$tenant\", le=\"0.25\"}[1h])) / sum by (tenant) (rate(http_server_requests_seconds_count{tenant=~\"$tenant\"}[1h]))",
+          "legendFormat": "{{tenant}}",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}

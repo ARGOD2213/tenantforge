@@ -1,0 +1,42 @@
+# Helm values for the OpenTelemetry Collector (open-telemetry/opentelemetry-collector chart), namespace observability.
+# The API and worker send OTLP traces here (OTLP_TRACES_ENDPOINT in k8s/base/config.yaml); spans carry tenant.id
+# and tenant.tier, so one tenant's slow requests can be pulled out of the traces.
+#
+#   helm install otel-collector open-telemetry/opentelemetry-collector -n observability --create-namespace \
+#     -f deploy/observability/otel-collector-values.yaml
+# Service "otel-collector" matches OTLP_TRACES_ENDPOINT; ServiceAccount "otel-collector" matches the IRSA role in
+# infra/terraform/iam.tf (irsa_role_arns.otel_collector)
+fullnameOverride: otel-collector
+mode: deployment
+replicaCount: 2
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+serviceAccount:
+  annotations: {} # eks.amazonaws.com/role-arn: <terraform output irsa_role_arns.otel_collector>
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_percentage: 80
+      spike_limit_percentage: 20
+    batch: {}
+  exporters:
+    awsxray:
+      region: ap-south-1
+      indexed_attributes: [tenant.id, tenant.tier]
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [awsxray]
