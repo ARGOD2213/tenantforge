@@ -29,4 +29,4 @@ done
 } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 lines=$(printf '%s' "$rows" | sed 's/^| [^ ]* | //; s/ |$//; s/ | / /g' | awk '{printf "%s: %s tests, %s failed%%0A", $1, $2, $3}')
-echo "::notice title=API tests: $total run, $failed failed, $skipped skipped::$lines"
+echo "::notice title=API tests · $total run · $failed failed · $skipped skipped::$lines"

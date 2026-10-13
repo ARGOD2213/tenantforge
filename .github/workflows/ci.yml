@@ -16,6 +16,7 @@ jobs:
   api:
     name: API · build + Testcontainers tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: api
@@ -37,7 +38,7 @@ jobs:
         run: bash ../.github/scripts/annotate-maven.sh maven.log target/surefire-reports target/failsafe-reports
       - name: Test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: api-test-reports
           path: |
