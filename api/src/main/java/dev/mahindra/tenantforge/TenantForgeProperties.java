@@ -43,13 +43,15 @@ public record TenantForgeProperties(
     }
 
     /**
-     * @param endpoint  optional endpoint override (LocalStack); empty in AWS
-     * @param s3Sse     server-side encryption for tenant files: aws:kms, AES256 or none
-     * @param kmsKeyId  KMS key for aws:kms (optional: AWS default key when empty)
+     * @param endpoint         optional endpoint override (LocalStack); empty in AWS
+     * @param presignEndpoint  endpoint used in download links when the browser reaches S3 differently (local Docker)
+     * @param s3Sse            server-side encryption for tenant files: aws:kms, AES256 or none
+     * @param kmsKeyId         KMS key for aws:kms (optional: AWS default key when empty)
      */
     public record Aws(
             @DefaultValue("ap-south-1") String region,
             String endpoint,
+            String presignEndpoint,
             String exportQueueUrl,
             String bucket,
             @DefaultValue("aws:kms") String s3Sse,

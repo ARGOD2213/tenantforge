@@ -7,9 +7,14 @@ spring:
       ddl-auto: none
     properties:
       hibernate.jdbc.time_zone: UTC
-  # migrations are run per database by TenantMigrations, not by Boot's single-database Flyway
+  # migrations are run per database by TenantMigrations, not by Boot's single-database Flyway / SQL init
   flyway:
     enabled: false
+  sql:
+    init:
+      mode: never
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -57,6 +62,7 @@ tenantforge:
   aws:
     region: ${AWS_REGION:ap-south-1}
     endpoint: ${AWS_ENDPOINT:}
+    presign-endpoint: ${AWS_PRESIGN_ENDPOINT:}
     export-queue-url: ${EXPORT_QUEUE_URL:}
     bucket: ${TENANT_BUCKET:tenantforge-files}
     s3-sse: ${S3_SSE:aws:kms}

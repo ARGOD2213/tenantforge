@@ -45,8 +45,9 @@ public class AwsConfig {
     S3Presigner s3Presigner(TenantForgeProperties props) {
         var aws = props.aws();
         var builder = S3Presigner.builder().region(Region.of(aws.region()));
-        if (StringUtils.hasText(aws.endpoint())) {
-            builder.endpointOverride(URI.create(aws.endpoint()))
+        String endpoint = StringUtils.hasText(aws.presignEndpoint()) ? aws.presignEndpoint() : aws.endpoint();
+        if (StringUtils.hasText(endpoint)) {
+            builder.endpointOverride(URI.create(endpoint))
                     .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build());
         }
         return builder.build();

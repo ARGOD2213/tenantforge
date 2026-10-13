@@ -13,6 +13,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -20,6 +21,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.util.StringUtils;
+
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jwt.JWTParser;
 
 import dev.mahindra.tenantforge.TenantForgeProperties;
 import dev.mahindra.tenantforge.ratelimit.TokenBucketRateLimiter;
@@ -58,18 +62,30 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Keycloak tokens (RS256, verified against the realm's published keys and issuer). In the {@code dev} profile,
+     * HS256 tokens from {@code /dev/token} are accepted as well, so the API is usable without running Keycloak.
+     */
     @Bean
     JwtDecoder jwtDecoder(TenantForgeProperties props) {
         TenantForgeProperties.Security security = props.security();
-        if (StringUtils.hasText(security.devHmacSecret())) {
-            var key = new SecretKeySpec(security.devHmacSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-            NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-            decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(DEV_ISSUER));
-            return decoder;
+        NimbusJwtDecoder keycloak = NimbusJwtDecoder.withJwkSetUri(security.jwkSetUri()).build();
+        keycloak.setJwtValidator(JwtValidators.createDefaultWithIssuer(security.issuer()));
+        if (!StringUtils.hasText(security.devHmacSecret())) {
+            return keycloak;
         }
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(security.jwkSetUri()).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(security.issuer()));
-        return decoder;
+        var key = new SecretKeySpec(security.devHmacSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        NimbusJwtDecoder dev = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+        dev.setJwtValidator(JwtValidators.createDefaultWithIssuer(DEV_ISSUER));
+        return token -> isHs256(token) ? dev.decode(token) : keycloak.decode(token);
+    }
+
+    private static boolean isHs256(String token) {
+        try {
+            return JWSAlgorithm.HS256.equals(JWTParser.parse(token).getHeader().getAlgorithm());
+        } catch (java.text.ParseException e) {
+            throw new BadJwtException("Malformed token", e);
+        }
     }
 
     static JwtAuthenticationConverter authenticationConverter() {
