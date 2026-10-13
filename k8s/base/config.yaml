@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenantforge
+---
+# Non-secret settings. The prod overlay fills in values from Terraform outputs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenantforge-config
+data:
+  DB_URL: jdbc:postgresql://AURORA_ENDPOINT:5432/tenantforge?sslmode=require
+  REDIS_HOST: ELASTICACHE_ENDPOINT
+  REDIS_SSL: "true"
+  AWS_REGION: ap-south-1
+  EXPORT_QUEUE_URL: https://sqs.ap-south-1.amazonaws.com/ACCOUNT_ID/tenantforge-exports
+  TENANT_BUCKET: tenantforge-files
+  S3_SSE: aws:kms
+  KMS_KEY_ID: ""
+  OIDC_ISSUER: https://auth.example.com/realms/tenantforge
+  OIDC_JWKS_URI: https://auth.example.com/realms/tenantforge/protocol/openid-connect/certs
+  TRACING_ENABLED: "true"
+  TRACING_SAMPLE: "0.1"
+  OTLP_TRACES_ENDPOINT: http://otel-collector.observability:4318/v1/traces
+---
+# Secrets come from AWS Secrets Manager through the External Secrets Operator; nothing secret lives in git.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: tenantforge-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-secrets-manager
+  target:
+    name: tenantforge-secrets
+  dataFrom:
+    - extract:
+        key: tenantforge/prod

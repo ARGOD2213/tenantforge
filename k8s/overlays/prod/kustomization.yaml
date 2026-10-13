@@ -1,0 +1,22 @@
+# Production overlay. Replace the placeholders with `terraform output` values (see infra/terraform/outputs.tf);
+# CI bumps the image tags on every merge and Argo CD syncs this directory.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/argod2213/tenantforge-api
+    newTag: "0.1.0"
+  - name: ghcr.io/argod2213/tenantforge-web
+    newTag: "0.1.0"
+patches:
+  - target: { kind: ConfigMap, name: tenantforge-config }
+    patch: |-
+      - op: replace
+        path: /data/AWS_REGION
+        value: ap-south-1
+  - target: { kind: HorizontalPodAutoscaler, name: tenantforge-api }
+    patch: |-
+      - op: replace
+        path: /spec/maxReplicas
+        value: 40

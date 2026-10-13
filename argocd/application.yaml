@@ -1,0 +1,21 @@
+# GitOps: Argo CD keeps the cluster in sync with k8s/overlays/prod on main.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenantforge
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ARGOD2213/tenantforge
+    targetRevision: main
+    path: k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenantforge
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

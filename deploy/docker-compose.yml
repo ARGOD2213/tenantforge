@@ -1,0 +1,104 @@
+# TenantForge locally.
+#
+#   docker compose up --build                    # core: Postgres, Redis, LocalStack (SQS + S3), API, worker  (~1.2 GB RAM)
+#   docker compose --profile full up --build     # + Keycloak and the Next.js dashboard                       (~2 GB RAM)
+#
+# Core mode uses dev tokens (POST /dev/token). Full mode logs in through Keycloak at http://localhost:3000.
+
+name: tenantforge
+
+x-api-env: &api-env
+  DB_URL: jdbc:postgresql://postgres:5432/tenantforge
+  REDIS_HOST: redis
+  AWS_REGION: ap-south-1
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_ENDPOINT: http://localstack:4566
+  AWS_PRESIGN_ENDPOINT: http://localhost:4566
+  EXPORT_QUEUE_URL: http://localstack:4566/000000000000/tenantforge-exports
+  TENANT_BUCKET: tenantforge-files
+  S3_SSE: AES256
+  OIDC_ISSUER: http://localhost:8080/realms/tenantforge
+  OIDC_JWKS_URI: http://keycloak:8080/realms/tenantforge/protocol/openid-connect/certs
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_local_dev_secret}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tenantforge"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  localstack:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: sqs,s3
+      AWS_DEFAULT_REGION: ap-south-1
+    ports: ["4566:4566"]
+    volumes:
+      - ./localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal s3 ls s3://tenantforge-files"]
+      interval: 5s
+      retries: 30
+
+  api:
+    build: ../api
+    environment:
+      <<: *api-env
+      SPRING_PROFILES_ACTIVE: dev
+    ports: ["8081:8081"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      localstack: { condition: service_healthy }
+
+  worker:
+    build: ../api
+    environment:
+      <<: *api-env
+      SPRING_PROFILES_ACTIVE: worker
+    depends_on:
+      api: { condition: service_started }
+
+  keycloak:
+    profiles: [full]
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # tokens say iss=http://localhost:8080/... even when the API/web reach Keycloak as keycloak:8080
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports: ["8080:8080"]
+    volumes:
+      - ./keycloak/tenantforge-realm.json:/opt/keycloak/data/import/tenantforge-realm.json:ro
+
+  web:
+    profiles: [full]
+    build: ../web
+    environment:
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: local-dev-only-nextauth-secret
+      KEYCLOAK_CLIENT_ID: tenantforge-web
+      KEYCLOAK_CLIENT_SECRET: tenantforge-web-dev-secret
+      KEYCLOAK_ISSUER: http://localhost:8080/realms/tenantforge
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/tenantforge
+      API_URL: http://api:8081
+    ports: ["3000:3000"]
+    depends_on: [api, keycloak]
+
+volumes:
+  pgdata:

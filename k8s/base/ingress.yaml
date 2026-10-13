@@ -1,0 +1,30 @@
+# One ALB (AWS Load Balancer Controller) with AWS WAF attached; CloudFront sits in front for static assets.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tenantforge
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/CERT_ID
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:ap-south-1:ACCOUNT_ID:regional/webacl/tenantforge/WAF_ID
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
+spec:
+  ingressClassName: alb
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: tenantforge-api, port: { number: 80 } } }
+          - path: /webhooks
+            pathType: Prefix
+            backend: { service: { name: tenantforge-api, port: { number: 80 } } }
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: tenantforge-web, port: { number: 80 } } }

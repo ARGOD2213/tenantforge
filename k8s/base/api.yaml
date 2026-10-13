@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tenantforge-api
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/tenantforge-api # IRSA: SQS send, S3/KMS on tenants/*
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenantforge-api
+  labels: { app: tenantforge-api }
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate: { maxSurge: 25%, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: tenantforge-api }
+  template:
+    metadata:
+      labels: { app: tenantforge-api }
+    spec:
+      serviceAccountName: tenantforge-api
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: tenantforge-api }
+      containers:
+        - name: api
+          image: ghcr.io/argod2213/tenantforge-api:latest
+          ports:
+            - { name: http, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: tenantforge-config }
+            - secretRef: { name: tenantforge-secrets }
+          resources:
+            requests: { cpu: 500m, memory: 768Mi }
+            limits: { memory: 768Mi }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          lifecycle:
+            preStop: { sleep: { seconds: 10 } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenantforge-api
+spec:
+  selector: { app: tenantforge-api }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tenantforge-api
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: tenantforge-api }
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 65 }
+  behavior:
+    scaleDown: { stabilizationWindowSeconds: 300 }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tenantforge-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: tenantforge-api }

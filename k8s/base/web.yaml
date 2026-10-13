@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenantforge-web
+  labels: { app: tenantforge-web }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: tenantforge-web }
+  template:
+    metadata:
+      labels: { app: tenantforge-web }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: ghcr.io/argod2213/tenantforge-web:latest
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            - { name: API_URL, value: http://tenantforge-api }
+            - { name: NEXTAUTH_URL, value: https://app.example.com }
+            - { name: KEYCLOAK_CLIENT_ID, value: tenantforge-web }
+            - { name: KEYCLOAK_ISSUER, value: https://auth.example.com/realms/tenantforge }
+          envFrom:
+            - secretRef: { name: tenantforge-secrets } # NEXTAUTH_SECRET, KEYCLOAK_CLIENT_SECRET
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { memory: 384Mi }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenantforge-web
+spec:
+  selector: { app: tenantforge-web }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tenantforge-web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: tenantforge-web }
