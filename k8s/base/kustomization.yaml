@@ -6,4 +6,5 @@ resources:
   - api.yaml
   - worker.yaml
   - web.yaml
+  - keycloak.yaml
   - ingress.yaml

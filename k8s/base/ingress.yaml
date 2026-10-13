@@ -1,4 +1,5 @@
-# One ALB (AWS Load Balancer Controller) with AWS WAF attached; CloudFront sits in front for static assets.
+# One ALB (AWS Load Balancer Controller) with AWS WAF attached. CloudFront can sit in front of the web host for
+# static assets (infra/terraform/edge.tf, enable_cloudfront). Health-check paths are set per Service.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,9 +8,9 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/CERT_ID
     alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:ap-south-1:ACCOUNT_ID:regional/webacl/tenantforge/WAF_ID
-    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
 spec:
   ingressClassName: alb
   rules:
@@ -28,3 +29,13 @@ spec:
           - path: /
             pathType: Prefix
             backend: { service: { name: tenantforge-web, port: { number: 80 } } }
+    # only the login and token endpoints are public; the admin console is reached with kubectl port-forward
+    - host: auth.example.com
+      http:
+        paths:
+          - path: /realms
+            pathType: Prefix
+            backend: { service: { name: keycloak, port: { number: 80 } } }
+          - path: /resources
+            pathType: Prefix
+            backend: { service: { name: keycloak, port: { number: 80 } } }

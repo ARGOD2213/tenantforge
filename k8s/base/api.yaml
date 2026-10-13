@@ -64,6 +64,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tenantforge-api
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
 spec:
   selector: { app: tenantforge-api }
   ports:

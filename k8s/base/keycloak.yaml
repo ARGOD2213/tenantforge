@@ -1,0 +1,94 @@
+# Keycloak: SSO for every tenant. Users belong to a /tenants/{tenantId} group and get tenant_admin or
+# tenant_member; the realm's mappers put tenant_id and roles into the access token the API trusts.
+# Two replicas share sessions through Infinispan (JGroups discovery over the headless service below).
+# Its database is a separate "keycloak" database on the pooled Aurora cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-port: "9000"
+    alb.ingress.kubernetes.io/healthcheck-path: /health/ready
+spec:
+  selector: { app: keycloak }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-discovery
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector: { app: keycloak }
+  ports:
+    - { name: jgroups, port: 7800, targetPort: jgroups }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels: { app: keycloak }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: keycloak }
+  template:
+    metadata:
+      labels: { app: keycloak }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args: ["start"]
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 9000 }
+            - { name: jgroups, containerPort: 7800 }
+          env:
+            - { name: KC_HOSTNAME, value: https://auth.example.com }
+            - { name: KC_HTTP_ENABLED, value: "true" } # TLS ends at the ALB
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - { name: KC_METRICS_ENABLED, value: "true" }
+            - { name: KC_DB, value: postgres }
+            - name: KC_DB_URL
+              valueFrom: { configMapKeyRef: { name: tenantforge-config, key: KC_DB_URL } }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: tenantforge-secrets, key: KC_DB_PASSWORD } }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: tenantforge-secrets, key: KC_BOOTSTRAP_ADMIN_PASSWORD } }
+            - { name: KC_CACHE, value: ispn }
+            - { name: KC_CACHE_STACK, value: kubernetes }
+            - { name: JAVA_OPTS_APPEND, value: "-Djgroups.dns.query=keycloak-discovery.tenantforge.svc.cluster.local" }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { memory: 1Gi }
+          startupProbe:
+            httpGet: { path: /health/started, port: management }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: keycloak
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: keycloak }
