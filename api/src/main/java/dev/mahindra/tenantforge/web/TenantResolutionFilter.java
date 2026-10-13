@@ -25,9 +25,12 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Binds the request to the tenant named in the verified JWT. The tenant must exist in the catalog and be active.
- * Logs and traces are tagged with the tenant so a noisy or failing tenant is easy to spot.
+ * Logs, traces and request metrics are tagged with the tenant so a noisy or failing tenant is easy to spot.
  */
 public class TenantResolutionFilter extends OncePerRequestFilter {
+
+    /** Request attribute holding the tenant slug, read by {@link TenantObservationConvention} after the request. */
+    public static final String TENANT_ATTRIBUTE = "tenantforge.tenant";
 
     private final TenantCatalog catalog;
     private final ObjectProvider<Tracer> tracer;
@@ -61,6 +64,7 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
             return;
         }
         TenantContext.set(tenantId.get());
+        request.setAttribute(TENANT_ATTRIBUTE, tenant.get().slug());
         MDC.put("tenant_id", tenant.get().slug());
         Tracer t = tracer.getIfAvailable();
         Span span = t == null ? null : t.currentSpan();

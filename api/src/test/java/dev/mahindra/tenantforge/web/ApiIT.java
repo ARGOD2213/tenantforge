@@ -1,5 +1,6 @@
 package dev.mahindra.tenantforge.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,13 +19,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import dev.mahindra.tenantforge.IntegrationTest;
+import dev.mahindra.tenantforge.invoice.Invoice;
 import dev.mahindra.tenantforge.tenancy.Tenant;
 
 class ApiIT extends IntegrationTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    MeterRegistry meters;
 
     @Test
     void usersOnlySeeTheirTenantsInvoices() throws Exception {
@@ -99,6 +107,29 @@ class ApiIT extends IntegrationTest {
         mvc.perform(get("/api/invoices").with(user(ZENITH, "tenant_member")))
                 .andExpect(header().string("X-RateLimit-Limit", "100"))
                 .andExpect(header().exists("X-RateLimit-Remaining"));
+    }
+
+    @Test
+    void invoicesGetDefaultPaymentTermsUnlessADueDateIsGiven() throws Exception {
+        create(ACME, "TERMS-1");
+        mvc.perform(get("/api/invoices").with(user(ACME, "tenant_member")))
+                .andExpect(jsonPath("$[0].dueOn").value(LocalDate.now().plusDays(Invoice.DEFAULT_TERMS_DAYS).toString()));
+
+        mvc.perform(post("/api/invoices").with(user(ACME, "tenant_member")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"number\":\"TERMS-2\",\"customer\":\"x\",\"amountCents\":1,\"dueOn\":\"2030-01-31\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dueOn").value("2030-01-31"));
+    }
+
+    @Test
+    void requestMetricsAreTaggedWithTheTenant() throws Exception {
+        mvc.perform(get("/api/me").with(user(ZENITH, "tenant_member"))).andExpect(status().isOk());
+        mvc.perform(get("/api/invoices")).andExpect(status().isUnauthorized());
+
+        assertThat(meters.find("http.server.requests").tag("tenant", "zenith").tag("uri", "/api/me").timers())
+                .isNotEmpty();
+        assertThat(meters.find("http.server.requests").tag("tenant", "none").tag("status", "401").timers())
+                .isNotEmpty();
     }
 
     private String create(UUID tenant, String number) throws Exception {

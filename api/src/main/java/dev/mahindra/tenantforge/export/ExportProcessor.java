@@ -40,7 +40,7 @@ public class ExportProcessor {
             return; // SQS is at-least-once: a redelivered message is a no-op
         }
         job.running();
-        StringBuilder csv = new StringBuilder("number,customer,amount,currency,status,issued_on\n");
+        StringBuilder csv = new StringBuilder("number,customer,amount,currency,status,issued_on,due_on\n");
         AtomicInteger rows = new AtomicInteger();
         try (Stream<Invoice> stream = invoices.streamAllByOrderByIssuedOnAscNumberAsc()) {
             stream.forEach(i -> {
@@ -49,7 +49,8 @@ public class ExportProcessor {
                         .append(String.format("%d.%02d", i.getAmountCents() / 100, i.getAmountCents() % 100)).append(',')
                         .append(i.getCurrency()).append(',')
                         .append(i.getStatus()).append(',')
-                        .append(i.getIssuedOn()).append('\n');
+                        .append(i.getIssuedOn()).append(',')
+                        .append(i.getDueOn() == null ? "" : i.getDueOn().toString()).append('\n');
                 rows.incrementAndGet();
             });
         }

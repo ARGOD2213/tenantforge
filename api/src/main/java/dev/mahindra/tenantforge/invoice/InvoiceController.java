@@ -53,7 +53,7 @@ class InvoiceController {
     ResponseEntity<InvoiceView> create(@Valid @RequestBody NewInvoice body) {
         try {
             Invoice saved = invoices.saveAndFlush(new Invoice(body.number(), body.customer(), body.amountCents(),
-                    body.currency() == null ? "INR" : body.currency()));
+                    body.currency() == null ? "INR" : body.currency(), body.dueOn()));
             return ResponseEntity.created(URI.create("/api/invoices/" + saved.getId())).body(InvoiceView.of(saved));
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice number already used");
@@ -64,14 +64,15 @@ class InvoiceController {
             @NotBlank @Size(max = 40) String number,
             @NotBlank @Size(max = 120) String customer,
             @Min(0) long amountCents,
-            @Pattern(regexp = "[A-Z]{3}") String currency) {
+            @Pattern(regexp = "[A-Z]{3}") String currency,
+            LocalDate dueOn) {
     }
 
     record InvoiceView(UUID id, String number, String customer, long amountCents, String currency, String status,
-            LocalDate issuedOn, Instant createdAt) {
+            LocalDate issuedOn, LocalDate dueOn, Instant createdAt) {
         static InvoiceView of(Invoice i) {
             return new InvoiceView(i.getId(), i.getNumber(), i.getCustomer(), i.getAmountCents(), i.getCurrency(),
-                    i.getStatus(), i.getIssuedOn(), i.getCreatedAt());
+                    i.getStatus(), i.getIssuedOn(), i.getDueOn(), i.getCreatedAt());
         }
     }
 }

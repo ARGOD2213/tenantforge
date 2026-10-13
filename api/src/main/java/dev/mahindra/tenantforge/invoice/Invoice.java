@@ -22,6 +22,8 @@ import jakarta.persistence.Table;
 @Table(schema = "app", name = "invoices")
 public class Invoice {
 
+    public static final int DEFAULT_TERMS_DAYS = 30;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -47,6 +49,10 @@ public class Invoice {
     @Column(name = "issued_on", nullable = false)
     private LocalDate issuedOn = LocalDate.now();
 
+    /** Added by an expand/contract migration (V2): nullable until the contract step, always written from here on. */
+    @Column(name = "due_on")
+    private LocalDate dueOn;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -54,10 +60,15 @@ public class Invoice {
     }
 
     public Invoice(String number, String customer, long amountCents, String currency) {
+        this(number, customer, amountCents, currency, null);
+    }
+
+    public Invoice(String number, String customer, long amountCents, String currency, LocalDate dueOn) {
         this.number = number;
         this.customer = customer;
         this.amountCents = amountCents;
         this.currency = currency;
+        this.dueOn = dueOn == null ? issuedOn.plusDays(DEFAULT_TERMS_DAYS) : dueOn;
     }
 
     @PrePersist
@@ -75,6 +86,7 @@ public class Invoice {
     public String getCurrency() { return currency; }
     public String getStatus() { return status; }
     public LocalDate getIssuedOn() { return issuedOn; }
+    public LocalDate getDueOn() { return dueOn; }
     public Instant getCreatedAt() { return createdAt; }
 
     /** Only for tests that prove the database rejects a forged tenant. */

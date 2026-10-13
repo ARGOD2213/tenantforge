@@ -69,6 +69,9 @@ public class TenantMigrations implements InitializingBean {
 
     private Flyway flyway(String url, String schema, String location) {
         return Flyway.configure()
+                // session-level advisory lock instead of one held in an open transaction: an open transaction would
+                // make CREATE INDEX CONCURRENTLY wait for it forever
+                .configuration(Map.of("flyway.postgresql.transactional.lock", "false"))
                 .dataSource(url, db.ownerUsername(), db.ownerPassword())
                 .schemas(schema)
                 .table("flyway_history")

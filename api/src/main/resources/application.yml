@@ -36,6 +36,11 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    distribution:
+      # a few fixed latency buckets (not a full histogram) keep per-tenant series affordable
+      slo:
+        "[http.server.requests]": 50ms,100ms,250ms,500ms,1s,2s
   tracing:
     enabled: ${TRACING_ENABLED:false}
     sampling:
