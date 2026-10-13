@@ -57,6 +57,13 @@ jobs:
       - run: docker compose -f deploy/docker-compose.yml up -d --build
       - run: scripts/demo.sh 2>&1 | tee demo.log; exit ${PIPESTATUS[0]}
         shell: bash
+      - name: Demo summary
+        if: always()
+        run: |
+          [ -f demo.log ] || exit 0
+          sed -i 's/\x1b\[[0-9;]*m//g' demo.log
+          { echo '### scripts/demo.sh against the compose stack'; echo '```'; cat demo.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=demo.sh::$(grep -E '✓|✗|All checks' demo.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
       - name: Annotate failures
         if: failure()
         run: |
@@ -104,13 +111,15 @@ jobs:
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Render prod overlay
         run: kubectl kustomize k8s/overlays/prod > rendered.yaml
-      # core resources against the Kubernetes schemas; KEDA, External Secrets and Argo CD CRDs from the CRDs catalog
+      # core resources against the Kubernetes schemas; KEDA, External Secrets and Argo CD CRDs from the CRDs catalog.
+      # (deploy/cluster/cluster-secret-store.yaml is left out: the catalog's ClusterSecretStore v1 schema does not
+      # compile in kubeconform's JSON Schema library, which kubeconform reports as "could not find schema".)
       - name: Validate
         run: |
           kubeconform -strict -summary -output text \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            rendered.yaml argocd/application.yaml deploy/cluster/cluster-secret-store.yaml 2>&1 | tee kubeconform.log; exit ${PIPESTATUS[0]}
+            rendered.yaml argocd/application.yaml 2>&1 | tee kubeconform.log; exit ${PIPESTATUS[0]}
         shell: bash
       - name: Annotate failures
         if: failure()
