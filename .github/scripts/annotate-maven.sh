@@ -22,8 +22,15 @@ for dir in "$@"; do
     [ -f "$f" ] || continue
     if grep -qE '<(failure|error)' "$f"; then
       name=$(basename "$f" .xml | sed 's/^TEST-//')
-      detail=$(grep -A12 -E '<(failure|error)' "$f" | sed 's/&quot;/"/g; s/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g' | head -40)
-      emit "$name" "$detail"
+      # root causes first (deduplicated), then the first assertion/exception line of each failing test
+      causes=$(grep -oE 'Caused by: [^&]*' "$f" | awk '!seen[$0]++' | tail -6)
+      firsts=$(grep -oE '<(failure|error) message="[^"]{0,400}' "$f" | grep -v 'Failed to load ApplicationContext' | sed 's/&quot;/"/g; s/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g' | head -8)
+      described=$(grep -A4 -E '^Description:' "$f" | head -12)
+      emit "$name" "CAUSES:
+$causes
+FIRST LINES:
+$firsts
+$described"
     fi
   done
 done
