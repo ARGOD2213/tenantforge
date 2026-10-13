@@ -86,13 +86,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <th>Customer</th>
                 <th>Status</th>
                 <th>Issued</th>
+                <th>Due</th>
                 <th style={{ textAlign: 'right' }}>Amount</th>
               </tr>
             </thead>
             <tbody>
               {invoices.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="faint">
+                  <td colSpan={6} className="faint">
                     No invoices yet. Add the first one below.
                   </td>
                 </tr>
@@ -103,6 +104,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <td>{i.customer}</td>
                   <td>{i.status}</td>
                   <td>{i.issuedOn}</td>
+                  <td>{i.dueOn ?? '—'}</td>
                   <td className="num">{money(i.amountCents, i.currency)}</td>
                 </tr>
               ))}

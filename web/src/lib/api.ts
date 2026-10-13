@@ -20,6 +20,7 @@ export type Invoice = {
   currency: string;
   status: string;
   issuedOn: string;
+  dueOn: string | null;
 };
 
 export type ExportJob = {
