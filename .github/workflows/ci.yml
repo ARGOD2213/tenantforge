@@ -27,7 +27,11 @@ jobs:
           java-version: '21'
           cache: maven
       # Unit tests + integration tests against real Postgres, Redis, LocalStack (SQS/S3) and Keycloak containers
-      - run: mvn -B -ntp verify
+      - run: mvn -B -ntp verify -Dsurefire.useFile=true 2>&1 | tee maven.log; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Annotate failures
+        if: failure()
+        run: bash ../.github/scripts/annotate-maven.sh maven.log target/surefire-reports target/failsafe-reports
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@v4
