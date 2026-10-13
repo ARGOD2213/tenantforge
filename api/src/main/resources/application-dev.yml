@@ -1,0 +1,8 @@
+# Local development: demo tenants and HS256 tokens from POST /dev/token, so Keycloak is optional.
+# Never use this profile anywhere real.
+tenantforge:
+  demo-data: true
+  security:
+    dev-hmac-secret: ${DEV_HMAC_SECRET:local-dev-only-secret-at-least-32-bytes}
+  aws:
+    s3-sse: ${S3_SSE:AES256}

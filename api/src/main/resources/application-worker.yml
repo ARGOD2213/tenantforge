@@ -1,0 +1,8 @@
+# Same image, no HTTP server: long-polls the export queue. Scaled by KEDA on queue depth.
+spring:
+  main:
+    web-application-type: none
+
+tenantforge:
+  worker:
+    enabled: true

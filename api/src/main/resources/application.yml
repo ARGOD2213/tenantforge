@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: tenantforge
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  # migrations are run per database by TenantMigrations, not by Boot's single-database Flyway
+  flyway:
+    enabled: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    sampling:
+      probability: ${TRACING_SAMPLE:0.1}
+  otlp:
+    tracing:
+      endpoint: ${OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  pattern:
+    level: "%5p [%X{traceId:-},%X{spanId:-}] [tenant=%X{tenant_id:-}]"
+
+tenantforge:
+  demo-data: ${DEMO_DATA:false}
+  db:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tenantforge}
+    app-username: ${DB_APP_USER:tf_app}
+    app-password: ${DB_APP_PASSWORD:app}
+    owner-username: ${DB_OWNER_USER:tf_owner}
+    owner-password: ${DB_OWNER_PASSWORD:owner}
+  security:
+    issuer: ${OIDC_ISSUER:http://localhost:8080/realms/tenantforge}
+    jwk-set-uri: ${OIDC_JWKS_URI:http://localhost:8080/realms/tenantforge/protocol/openid-connect/certs}
+    dev-hmac-secret: ${DEV_HMAC_SECRET:}
+  aws:
+    region: ${AWS_REGION:ap-south-1}
+    endpoint: ${AWS_ENDPOINT:}
+    export-queue-url: ${EXPORT_QUEUE_URL:}
+    bucket: ${TENANT_BUCKET:tenantforge-files}
+    s3-sse: ${S3_SSE:aws:kms}
+    kms-key-id: ${KMS_KEY_ID:}
+  stripe:
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    price-plans:
+      pro_monthly: pro
+      enterprise_monthly: enterprise
+  worker:
+    enabled: ${WORKER_ENABLED:false}
+    max-receives: 3
+  cache:
+    local-ttl: 30s
+    redis-ttl: 5m
